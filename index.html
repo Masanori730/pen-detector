@@ -3,175 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Pen Detector</title>
+    <title>Pen Detector - Debug Mode</title>
     <style>
-        :root {
-            --primary: #4f46e5;
-            --bg: #f8fafc;
-        }
-        body { 
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            padding: 40px 20px; 
-            background: var(--bg);
-            color: #1e293b;
-        }
-        .container { 
-            background: white; 
-            padding: 30px; 
-            border-radius: 16px; 
-            box-shadow: 0 10px 25px rgba(0,0,0,0.05); 
-            max-width: 500px; 
-            width: 100%; 
-            text-align: center; 
-        }
-        h1 { margin-bottom: 8px; color: #0f172a; }
-        p { color: #64748b; margin-bottom: 24px; }
-        
-        #upload-label {
-            display: inline-block;
-            background: var(--primary);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            transition: opacity 0.2s;
-        }
-        #upload-label:hover { opacity: 0.9; }
+        :root { --primary: #4f46e5; --bg: #f8fafc; }
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background: var(--bg); }
+        .container { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); max-width: 500px; width: 100%; text-align: center; }
+        #upload-label { display: inline-block; background: var(--primary); color: white; padding: 12px 24px; border-radius: 8px; cursor: pointer; margin-bottom: 20px; }
         #image-input { display: none; }
-
-        .preview-wrapper {
-            position: relative;
-            margin-top: 24px;
-            display: none;
-            border-radius: 12px;
-            overflow: hidden;
-            border: 1px solid #e2e8f0;
-        }
-        #image-preview { 
-            display: block;
-            max-width: 100%; 
-            height: auto;
-        }
-        
-        #status-pill {
-            display: inline-block;
-            margin-top: 20px;
-            padding: 6px 16px;
-            border-radius: 20px;
-            font-size: 0.875rem;
-            background: #e2e8f0;
-            font-weight: 500;
-        }
-        
-        #results-count { 
-            margin-top: 15px; 
-            font-size: 1.5rem; 
-            font-weight: 800;
-            color: var(--primary); 
-        }
-
-        .error { background: #fee2e2 !important; color: #dc2626 !important; }
+        #image-preview { max-width: 100%; border-radius: 8px; margin-bottom: 20px; display: none; }
+        #status { font-weight: bold; margin-bottom: 10px; color: #64748b; }
+        #count { font-size: 2rem; font-weight: 800; color: var(--primary); margin-bottom: 20px; }
+        .debug-area { width: 100%; background: #1e293b; color: #34d399; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 12px; text-align: left; overflow-x: auto; max-height: 200px; display: none; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h1>Pen Detector</h1>
-    <p>Upload an image to count pens using AI</p>
-    
-    <label for="image-input" id="upload-label">Choose Image</label>
+    <label for="image-input" id="upload-label">Upload Pen Image</label>
     <input type="file" id="image-input" accept="image/*">
     
-    <div class="preview-wrapper" id="wrapper">
-        <img id="image-preview" src="#" alt="Preview">
-    </div>
+    <img id="image-preview" src="">
+    <div id="status">Ready</div>
+    <div id="count"></div>
     
-    <div id="status-pill">System Ready</div>
-    <div id="results-count"></div>
+    <p style="font-size: 11px; color: #94a3b8;">Raw API Output (Debug):</p>
+    <div id="debug" class="debug-area"></div>
 </div>
 
 <script>
     const imageInput = document.getElementById('image-input');
     const imagePreview = document.getElementById('image-preview');
-    const wrapper = document.getElementById('wrapper');
-    const statusPill = document.getElementById('status-pill');
-    const resultsCount = document.getElementById('results-count');
+    const status = document.getElementById('status');
+    const countDiv = document.getElementById('count');
+    const debugDiv = document.getElementById('debug');
 
-    imageInput.addEventListener('change', (e) => {
+    imageInput.addEventListener('change', async (e) => {
         const file = e.target.files[0];
         if (!file) return;
 
         const reader = new FileReader();
-        reader.onload = (event) => {
+        reader.onload = async (event) => {
             imagePreview.src = event.target.result;
-            wrapper.style.display = 'block';
-            statusPill.textContent = "Processing AI Workflow...";
-            statusPill.classList.remove('error');
-            resultsCount.textContent = "";
+            imagePreview.style.display = 'block';
+            status.textContent = "Analyzing...";
+            countDiv.textContent = "";
+            debugDiv.style.display = "none";
             
-            const base64Image = event.target.result.split(',')[1];
-            detectObjects(base64Image);
+            const base64 = event.target.result.split(',')[1];
+            await callRoboflow(base64);
         };
         reader.readAsDataURL(file);
     });
 
-    async function detectObjects(base64Image) {
-        const API_KEY = "V3AIzFk49PlsUZXuSgw3"; 
-        const WORKSPACE = "artorias-lhd8r";
-        const WORKFLOW = "detect-count-and-visualize";
-        
-        // Using the primary inference endpoint for workflows
-        const url = `https://detect.roboflow.com/infer/workflows/${WORKSPACE}/${WORKFLOW}`;
+    async function callRoboflow(base64) {
+        const url = "https://detect.roboflow.com/infer/workflows/artorias-lhd8r/detect-count-and-visualize";
+        const body = {
+            api_key: "V3AIzFk49PlsUZXuSgw3",
+            inputs: { image: { type: "base64", value: base64 } }
+        };
 
         try {
             const response = await fetch(url, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    api_key: API_KEY,
-                    inputs: {
-                        image: { type: "base64", value: base64Image }
-                    }
-                })
+                body: JSON.stringify(body)
             });
-
-            if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-            
             const data = await response.json();
-            console.log("Roboflow Full Response:", data);
+            
+            // Show debug info
+            debugDiv.style.display = "block";
+            debugDiv.textContent = JSON.stringify(data, null, 2);
 
             let predictions = [];
 
-            // Robust data extraction to avoid 'undefined'
-            if (data.outputs && Array.isArray(data.outputs) && data.outputs.length > 0) {
-                // Check common workflow output keys
-                predictions = data.outputs[0].predictions || data.outputs[0].output || [];
-            } else if (data.predictions) {
-                predictions = data.predictions;
+            // SEARCH FOR PREDICTIONS IN THE DATA
+            if (data.outputs && data.outputs[0]) {
+                const out = data.outputs[0];
+                // Try every possible key Roboflow uses
+                predictions = out.predictions || out.output || out.detections || [];
+                
+                // If it's still empty, check if it's a "nested" count step
+                if (predictions.length === 0 && out.count !== undefined) {
+                    predictions = new Array(out.count); // Fake array for length
+                }
             }
 
-            statusPill.textContent = "Analysis Complete";
-            
-            // Final check to ensure we are counting an array
-            if (Array.isArray(predictions)) {
-                resultsCount.textContent = `${predictions.length} Pens Detected`;
-            } else {
-                resultsCount.textContent = "0 Pens Detected";
-                console.warn("Predictions was not an array:", predictions);
-            }
-            
-        } catch (error) {
-            console.error("API Error:", error);
-            statusPill.textContent = "Error: " + error.message;
-            statusPill.classList.add('error');
-            resultsCount.textContent = "Check Console";
+            status.textContent = "Analysis Complete";
+            countDiv.textContent = `${predictions.length} Pens Detected`;
+
+        } catch (err) {
+            status.textContent = "Error: " + err.message;
+            console.error(err);
         }
     }
 </script>
-
 </body>
 </html>
