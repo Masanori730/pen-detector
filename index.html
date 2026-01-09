@@ -3,128 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pen Detector - Fixed</title>
+    <title>AI Pen Detector</title>
     <style>
-        :root { --primary: #4f46e5; --bg: #f8fafc; }
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background: var(--bg); }
-        .container { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); max-width: 500px; width: 100%; text-align: center; }
-        #upload-label { display: inline-block; background: var(--primary); color: white; padding: 12px 24px; border-radius: 8px; cursor: pointer; margin-bottom: 20px; font-weight: bold; }
-        #image-input { display: none; }
-        #image-preview { max-width: 100%; border-radius: 8px; margin-bottom: 20px; display: none; border: 1px solid #e2e8f0; }
-        #status { font-weight: bold; margin-bottom: 10px; color: #64748b; }
-        #count { font-size: 2.5rem; font-weight: 800; color: var(--primary); margin-bottom: 20px; }
-        .debug-area { width: 100%; background: #1e293b; color: #34d399; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 11px; text-align: left; overflow-x: auto; max-height: 250px; display: none; white-space: pre-wrap; word-break: break-all; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #f8f9fa;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        .card {
+            background: white;
+            padding: 2rem;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+        #outputImage {
+            max-width: 100%;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .status-pill {
+            background: #e9ecef;
+            padding: 8px 20px;
+            border-radius: 20px;
+            display: inline-block;
+            margin-bottom: 15px;
+            font-size: 14px;
+            color: #6c757d;
+        }
+        .count-text {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4a4ae2;
+        }
+        input[type="file"] {
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>Pen Detector</h1>
-    <p>Upload a photo to count pens</p>
-    
-    <label for="image-input" id="upload-label">Select Image</label>
-    <input type="file" id="image-input" accept="image/*">
-    
-    <img id="image-preview" src="">
-    <div id="status">Ready</div>
-    <div id="count"></div>
-    
-    <div style="margin-top: 30px;">
-        <p style="font-size: 11px; color: #94a3b8; margin-bottom: 5px;">Technical Debug Output:</p>
-        <div id="debug" class="debug-area"></div>
-    </div>
-</div>
-
-<script>
-    const imageInput = document.getElementById('image-input');
-    const imagePreview = document.getElementById('image-preview');
-    const status = document.getElementById('status');
-    const countDiv = document.getElementById('count');
-    const debugDiv = document.getElementById('debug');
-
-    imageInput.addEventListener('change', async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = async (event) => {
-            imagePreview.src = event.target.result;
-            imagePreview.style.display = 'block';
-            status.textContent = "Uploading to AI...";
-            countDiv.textContent = "";
-            debugDiv.style.display = "none";
-            
-            // Get base64 string without the "data:image/jpeg;base64," prefix
-            const base64 = event.target.result.split(',')[1];
-            await callRoboflow(base64);
-        };
-        reader.readAsDataURL(file);
-    });
-
-    async function callRoboflow(base64) {
-        // Updated URL to ensure it hits the correct workflow endpoint
-        const url = "https://detect.roboflow.com/infer/workflows/artorias-lhd8r/detect-count-and-visualize";
+    <div class="card">
+        <h1>AI Pen Detector</h1>
         
-        const payload = {
-            api_key: "V3AIzFk49PlsUZXuSgw3",
-            inputs: { 
-                image: { 
-                    type: "base64", 
-                    value: base64 
-                } 
-            }
-        };
+        <input type="file" id="imageInput" accept="image/*">
+        
+        <img id="outputImage" src="" alt="Analyzed Pen">
 
-        try {
-            const response = await fetch(url, {
-                method: "POST",
-                // THIS HEADER IS THE CRITICAL FIX:
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(payload)
-            });
+        <div id="statusPill" class="status-pill">Waiting for image...</div>
+        <div id="countDisplay" class="count-text">0 Pens Detected</div>
+    </div>
 
-            const data = await response.json();
-            
-            // Show the raw data in the debug box
-            debugDiv.style.display = "block";
-            debugDiv.textContent = JSON.stringify(data, null, 2);
+    <script>
+        const imageInput = document.getElementById('imageInput');
+        const outputImage = document.getElementById('outputImage');
+        const statusPill = document.getElementById('statusPill');
+        const countDisplay = document.getElementById('countDisplay');
 
-            if (!response.ok) {
-                throw new Error(data.message || `API Error ${response.status}`);
-            }
+        // Configuration from your screenshots
+        const API_KEY = "V3AIzFk49PlsUZXuSgw3";
+        const WORKSPACE = "artorias-lhd8r";
+        const WORKFLOW = "detect-count-and-visualize";
 
-            let predictions = [];
+        imageInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
 
-            // Dig into the response to find the count
-            if (data.outputs && data.outputs[0]) {
-                const stepOutput = data.outputs[0];
-                // Check common keys like 'predictions', 'output', or a custom 'count' variable
-                predictions = stepOutput.predictions || stepOutput.output || stepOutput.detections || [];
-                
-                // If your workflow uses a "Count" block, it might return a number directly
-                if (typeof predictions === 'number') {
-                    displayCount(predictions);
-                    return;
+            // Show loading state
+            statusPill.textContent = "Processing...";
+            countDisplay.textContent = "Detecting...";
+
+            // Convert image to Base64
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                const base64Image = event.target.result.split(',')[1];
+                await detectObjects(base64Image);
+            };
+            reader.readAsDataURL(file);
+        });
+
+        async function detectObjects(base64Image) {
+            const url = `https://detect.roboflow.com/infer/workflows/${WORKSPACE}/${WORKFLOW}`;
+
+            try {
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        api_key: API_KEY,
+                        inputs: {
+                            image: { type: "base64", value: base64Image }
+                        }
+                    })
+                });
+
+                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+
+                const data = await response.json();
+                console.log("Roboflow Response:", data);
+
+                // MAPPING THE WORKFLOW OUTPUTS
+                // We use data.outputs[0] because Workflows return an array of results
+                const result = data.outputs[0];
+
+                // 1. Get the count from your 'count_objects' block
+                const penCount = result.count_objects || 0;
+                countDisplay.textContent = `${penCount} Pens Detected`;
+
+                // 2. Get the visual from your 'annotated_image' block
+                if (result.annotated_image && result.annotated_image.value) {
+                    outputImage.src = `data:image/jpeg;base64,${result.annotated_image.value}`;
+                    outputImage.style.display = 'block';
                 }
+
+                statusPill.textContent = "Analysis Complete";
+
+            } catch (error) {
+                console.error("Error:", error);
+                statusPill.textContent = "Error occurred";
+                countDisplay.textContent = "Check Console (F12)";
             }
-
-            status.textContent = "Analysis Complete";
-            displayCount(predictions.length || 0);
-
-        } catch (err) {
-            status.textContent = "Error occurred";
-            countDiv.textContent = "⚠️";
-            debugDiv.style.display = "block";
-            debugDiv.textContent = "ERROR: " + err.message + "\n\nFULL DATA:\n" + debugDiv.textContent;
-            console.error(err);
         }
-    }
-
-    function displayCount(num) {
-        countDiv.textContent = num === 1 ? "1 Pen Detected" : `${num} Pens Detected`;
-    }
-</script>
+    </script>
 </body>
 </html>
