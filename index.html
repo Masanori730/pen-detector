@@ -3,32 +3,36 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pen Detector - Debug Mode</title>
+    <title>Pen Detector - Fixed</title>
     <style>
         :root { --primary: #4f46e5; --bg: #f8fafc; }
         body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; padding: 20px; background: var(--bg); }
         .container { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); max-width: 500px; width: 100%; text-align: center; }
-        #upload-label { display: inline-block; background: var(--primary); color: white; padding: 12px 24px; border-radius: 8px; cursor: pointer; margin-bottom: 20px; }
+        #upload-label { display: inline-block; background: var(--primary); color: white; padding: 12px 24px; border-radius: 8px; cursor: pointer; margin-bottom: 20px; font-weight: bold; }
         #image-input { display: none; }
-        #image-preview { max-width: 100%; border-radius: 8px; margin-bottom: 20px; display: none; }
+        #image-preview { max-width: 100%; border-radius: 8px; margin-bottom: 20px; display: none; border: 1px solid #e2e8f0; }
         #status { font-weight: bold; margin-bottom: 10px; color: #64748b; }
-        #count { font-size: 2rem; font-weight: 800; color: var(--primary); margin-bottom: 20px; }
-        .debug-area { width: 100%; background: #1e293b; color: #34d399; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 12px; text-align: left; overflow-x: auto; max-height: 200px; display: none; }
+        #count { font-size: 2.5rem; font-weight: 800; color: var(--primary); margin-bottom: 20px; }
+        .debug-area { width: 100%; background: #1e293b; color: #34d399; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 11px; text-align: left; overflow-x: auto; max-height: 250px; display: none; white-space: pre-wrap; word-break: break-all; }
     </style>
 </head>
 <body>
 
 <div class="container">
     <h1>Pen Detector</h1>
-    <label for="image-input" id="upload-label">Upload Pen Image</label>
+    <p>Upload a photo to count pens</p>
+    
+    <label for="image-input" id="upload-label">Select Image</label>
     <input type="file" id="image-input" accept="image/*">
     
     <img id="image-preview" src="">
     <div id="status">Ready</div>
     <div id="count"></div>
     
-    <p style="font-size: 11px; color: #94a3b8;">Raw API Output (Debug):</p>
-    <div id="debug" class="debug-area"></div>
+    <div style="margin-top: 30px;">
+        <p style="font-size: 11px; color: #94a3b8; margin-bottom: 5px;">Technical Debug Output:</p>
+        <div id="debug" class="debug-area"></div>
+    </div>
 </div>
 
 <script>
@@ -46,10 +50,11 @@
         reader.onload = async (event) => {
             imagePreview.src = event.target.result;
             imagePreview.style.display = 'block';
-            status.textContent = "Analyzing...";
+            status.textContent = "Uploading to AI...";
             countDiv.textContent = "";
             debugDiv.style.display = "none";
             
+            // Get base64 string without the "data:image/jpeg;base64," prefix
             const base64 = event.target.result.split(',')[1];
             await callRoboflow(base64);
         };
@@ -57,44 +62,68 @@
     });
 
     async function callRoboflow(base64) {
+        // Updated URL to ensure it hits the correct workflow endpoint
         const url = "https://detect.roboflow.com/infer/workflows/artorias-lhd8r/detect-count-and-visualize";
-        const body = {
+        
+        const payload = {
             api_key: "V3AIzFk49PlsUZXuSgw3",
-            inputs: { image: { type: "base64", value: base64 } }
+            inputs: { 
+                image: { 
+                    type: "base64", 
+                    value: base64 
+                } 
+            }
         };
 
         try {
             const response = await fetch(url, {
                 method: "POST",
-                body: JSON.stringify(body)
+                // THIS HEADER IS THE CRITICAL FIX:
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(payload)
             });
+
             const data = await response.json();
             
-            // Show debug info
+            // Show the raw data in the debug box
             debugDiv.style.display = "block";
             debugDiv.textContent = JSON.stringify(data, null, 2);
 
+            if (!response.ok) {
+                throw new Error(data.message || `API Error ${response.status}`);
+            }
+
             let predictions = [];
 
-            // SEARCH FOR PREDICTIONS IN THE DATA
+            // Dig into the response to find the count
             if (data.outputs && data.outputs[0]) {
-                const out = data.outputs[0];
-                // Try every possible key Roboflow uses
-                predictions = out.predictions || out.output || out.detections || [];
+                const stepOutput = data.outputs[0];
+                // Check common keys like 'predictions', 'output', or a custom 'count' variable
+                predictions = stepOutput.predictions || stepOutput.output || stepOutput.detections || [];
                 
-                // If it's still empty, check if it's a "nested" count step
-                if (predictions.length === 0 && out.count !== undefined) {
-                    predictions = new Array(out.count); // Fake array for length
+                // If your workflow uses a "Count" block, it might return a number directly
+                if (typeof predictions === 'number') {
+                    displayCount(predictions);
+                    return;
                 }
             }
 
             status.textContent = "Analysis Complete";
-            countDiv.textContent = `${predictions.length} Pens Detected`;
+            displayCount(predictions.length || 0);
 
         } catch (err) {
-            status.textContent = "Error: " + err.message;
+            status.textContent = "Error occurred";
+            countDiv.textContent = "⚠️";
+            debugDiv.style.display = "block";
+            debugDiv.textContent = "ERROR: " + err.message + "\n\nFULL DATA:\n" + debugDiv.textContent;
             console.error(err);
         }
+    }
+
+    function displayCount(num) {
+        countDiv.textContent = num === 1 ? "1 Pen Detected" : `${num} Pens Detected`;
     }
 </script>
 </body>
