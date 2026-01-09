@@ -113,7 +113,6 @@
             statusPill.classList.remove('error');
             resultsCount.textContent = "";
             
-            // Extract the base64 string
             const base64Image = event.target.result.split(',')[1];
             detectObjects(base64Image);
         };
@@ -121,12 +120,11 @@
     });
 
     async function detectObjects(base64Image) {
-        // Your specific credentials
         const API_KEY = "V3AIzFk49PlsUZXuSgw3"; 
         const WORKSPACE = "artorias-lhd8r";
         const WORKFLOW = "detect-count-and-visualize";
         
-        // Correct 2026 Workflow Endpoint
+        // Using the primary inference endpoint for workflows
         const url = `https://detect.roboflow.com/infer/workflows/${WORKSPACE}/${WORKFLOW}`;
 
         try {
@@ -141,26 +139,36 @@
                 })
             });
 
-            if (!response.ok) throw new Error(`Server Error (${response.status})`);
+            if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
             
             const data = await response.json();
-            console.log("Roboflow Response:", data);
+            console.log("Roboflow Full Response:", data);
 
             let predictions = [];
-            // Workflows return an array in 'outputs'
-            if (data.outputs && data.outputs.length > 0) {
-                predictions = data.outputs[0].predictions || [];
+
+            // Robust data extraction to avoid 'undefined'
+            if (data.outputs && Array.isArray(data.outputs) && data.outputs.length > 0) {
+                // Check common workflow output keys
+                predictions = data.outputs[0].predictions || data.outputs[0].output || [];
+            } else if (data.predictions) {
+                predictions = data.predictions;
             }
 
             statusPill.textContent = "Analysis Complete";
-            resultsCount.textContent = predictions.length === 1 
-                ? "1 Pen Detected" 
-                : `${predictions.length} Pens Detected`;
+            
+            // Final check to ensure we are counting an array
+            if (Array.isArray(predictions)) {
+                resultsCount.textContent = `${predictions.length} Pens Detected`;
+            } else {
+                resultsCount.textContent = "0 Pens Detected";
+                console.warn("Predictions was not an array:", predictions);
+            }
             
         } catch (error) {
             console.error("API Error:", error);
             statusPill.textContent = "Error: " + error.message;
             statusPill.classList.add('error');
+            resultsCount.textContent = "Check Console";
         }
     }
 </script>
