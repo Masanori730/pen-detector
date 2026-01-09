@@ -1,391 +1,42 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pen Detection Demo</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+// --- UPDATED INFERENCE FUNCTION ---
+async function detectObjects(base64Image) {
+    const API_KEY = "V3AIzFk49PlsUZXuSgw3"; // <--- PASTE YOUR KEY HERE
+    const WORKSPACE = "artorias-lhd8r";
+    const WORKFLOW = "detect-count-and-visualize";
+    
+    // The official 2026 workflow endpoint
+    const url = `https://detect.roboflow.com/infer/workflows/${WORKSPACE}/${WORKFLOW}`;
 
-        body {
-            background: linear-gradient(135deg, #1a1a2e 0%, #0f0f1e 100%);
-            color: #fff;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px;
-        }
-
-        .container {
-            max-width: 900px;
-            width: 100%;
-        }
-
-        h1 {
-            text-align: center;
-            margin: 30px 0;
-            font-size: 2.5em;
-            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .info-box {
-            background: rgba(100, 150, 255, 0.1);
-            border: 1px solid rgba(100, 150, 255, 0.3);
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            color: #a0c0ff;
-            font-size: 0.9em;
-        }
-
-        .controls {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 25px;
-            border-radius: 15px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            margin-bottom: 30px;
-            display: flex;
-            gap: 15px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-
-        input[type="file"] {
-            display: none;
-        }
-
-        .file-label {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 12px 30px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            font-weight: 600;
-            display: inline-block;
-        }
-
-        .file-label:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
-        }
-
-        button {
-            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            color: white;
-            padding: 12px 30px;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-            font-size: 1em;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        button:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(245, 87, 108, 0.4);
-        }
-
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        .status {
-            flex: 1;
-            text-align: center;
-            color: #a0a0a0;
-            font-style: italic;
-        }
-
-        .canvas-container {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 20px;
-            border-radius: 15px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 400px;
-        }
-
-        canvas {
-            max-width: 100%;
-            height: auto;
-            border-radius: 10px;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-        }
-
-        .results {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 20px;
-            border-radius: 15px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            margin-top: 20px;
-        }
-
-        .results h3 {
-            margin-bottom: 15px;
-            color: #667eea;
-        }
-
-        .detection-item {
-            background: rgba(255, 255, 255, 0.05);
-            padding: 10px 15px;
-            border-radius: 8px;
-            margin-bottom: 10px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .confidence {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-weight: 600;
-            font-size: 0.9em;
-        }
-
-        .debug-info {
-            background: rgba(255, 100, 100, 0.1);
-            border: 1px solid rgba(255, 100, 100, 0.3);
-            padding: 10px;
-            border-radius: 8px;
-            margin-top: 10px;
-            font-size: 0.85em;
-            font-family: monospace;
-            color: #ffaaaa;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>🔍 Pen Detection Demo</h1>
-        
-        <div class="info-box">
-            📝 <strong>YOLOv8 Object Detection</strong> - Upload an image containing pens to see real-time detection with bounding boxes and confidence scores.
-        </div>
-
-        <div class="controls">
-            <label for="imageUpload" class="file-label">
-                📁 Choose Image
-            </label>
-            <input type="file" id="imageUpload" accept="image/*">
-            
-            <button id="detectBtn" disabled>🎯 Detect Objects</button>
-            
-            <div class="status" id="status">No image selected</div>
-        </div>
-
-        <div class="canvas-container">
-            <canvas id="canvas"></canvas>
-        </div>
-
-        <div id="results" class="results" style="display: none;">
-            <h3>📊 Detection Results</h3>
-            <div id="resultsList"></div>
-            <div id="debugInfo" class="debug-info" style="display: none;"></div>
-        </div>
-    </div>
-
-    <script>
-        const API_ENDPOINT = 'https://serverless.roboflow.com/artorias-lhd8r/workflows/detect-count-and-visualize';
-        const API_KEY = 'V3AIzFk49PlsUZXuSgw3';
-
-        let uploadedImage = null;
-        let imageDataURL = null;
-
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const fileInput = document.getElementById('imageUpload');
-        const detectBtn = document.getElementById('detectBtn');
-        const status = document.getElementById('status');
-        const resultsDiv = document.getElementById('results');
-        const resultsList = document.getElementById('resultsList');
-        const debugInfo = document.getElementById('debugInfo');
-
-        fileInput.addEventListener('change', function(e) {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            uploadedImage = file;
-            status.textContent = '✅ Image loaded - Ready to detect';
-            detectBtn.disabled = false;
-
-            const reader = new FileReader();
-            reader.onload = function(event) {
-                imageDataURL = event.target.result;
-                drawImageOnCanvas(imageDataURL);
-            };
-            reader.readAsDataURL(file);
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                api_key: API_KEY,
+                inputs: {
+                    image: {
+                        type: "base64",
+                        value: base64Image
+                    }
+                }
+            })
         });
 
-        function drawImageOnCanvas(dataURL) {
-            const img = new Image();
-            img.onload = function() {
-                canvas.width = img.width;
-                canvas.height = img.height;
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.drawImage(img, 0, 0);
-            };
-            img.src = dataURL;
+        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+        
+        const data = await response.json();
+        console.log("Full API Response:", data);
+
+        // Workflows return an array in 'outputs'. We grab the first one.
+        let predictions = [];
+        if (data.outputs && data.outputs.length > 0) {
+            // Look for predictions inside the first output object
+            predictions = data.outputs[0].predictions || [];
         }
 
-        detectBtn.addEventListener('click', runDetection);
-
-        async function runDetection() {
-            if (!imageDataURL) {
-                status.textContent = '❌ Please upload an image first';
-                return;
-            }
-
-            detectBtn.disabled = true;
-            status.textContent = '🔄 Running detection...';
-            resultsDiv.style.display = 'none';
-
-            try {
-                const base64Data = imageDataURL.split(',')[1];
-
-                const response = await fetch(API_ENDPOINT, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        api_key: API_KEY,
-                        inputs: {
-                            image: {
-                                type: "base64",
-                                value: base64Data
-                            }
-                        }
-                    })
-                });
-
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`API Error ${response.status}: ${errorText}`);
-                }
-
-                const result = await response.json();
-                console.log('API Response:', result);
-
-                drawDetections(result);
-                displayResults(result);
-
-                status.textContent = '✅ Detection complete!';
-            } catch (error) {
-                console.error('Detection error:', error);
-                status.textContent = '❌ Detection failed - Check console (F12)';
-            } finally {
-                detectBtn.disabled = false;
-            }
-        }
-
-        function drawDetections(data) {
-            drawImageOnCanvas(imageDataURL);
-
-            // Handle Roboflow workflow response format - outputs is an ARRAY
-            let predictions = [];
-            
-            console.log('Full API response:', data);
-            
-            // Check if outputs is an array and find predictions inside
-            if (data.outputs && Array.isArray(data.outputs)) {
-                console.log('outputs is an array with length:', data.outputs.length);
-                
-                // Loop through outputs array to find predictions
-                for (let i = 0; i < data.outputs.length; i++) {
-                    console.log(`outputs[${i}]:`, data.outputs[i]);
-                    
-                    if (data.outputs[i] && data.outputs[i].predictions) {
-                        predictions = data.outputs[i].predictions;
-                        console.log('Found predictions in outputs[' + i + ']:', predictions);
-                        break;
-                    }
-                }
-            } else if (data.outputs?.predictions) {
-                predictions = data.outputs.predictions;
-            } else if (data.predictions) {
-                predictions = data.predictions;
-            }
-
-            console.log('Final predictions to draw:', predictions);
-
-            if (!predictions || predictions.length === 0) {
-                console.log('No predictions found. Full data structure:', JSON.stringify(data, null, 2));
-                return;
-            }
-
-            predictions.forEach(pred => {
-                const x = pred.x - pred.width / 2;
-                const y = pred.y - pred.height / 2;
-
-                ctx.strokeStyle = '#f5576c';
-                ctx.lineWidth = 3;
-                ctx.strokeRect(x, y, pred.width, pred.height);
-
-                ctx.fillStyle = '#f5576c';
-                ctx.font = 'bold 18px Arial';
-                const label = `${pred.class} ${Math.round(pred.confidence * 100)}%`;
-                const textWidth = ctx.measureText(label).width;
-                
-                ctx.fillRect(x, y - 25, textWidth + 10, 25);
-                ctx.fillStyle = 'white';
-                ctx.fillText(label, x + 5, y - 7);
-            });
-        }
-
-        function displayResults(data) {
-            // Same logic to extract predictions
-            let predictions = [];
-            
-            if (data.outputs && Array.isArray(data.outputs)) {
-                for (let i = 0; i < data.outputs.length; i++) {
-                    if (data.outputs[i] && data.outputs[i].predictions) {
-                        predictions = data.outputs[i].predictions;
-                        break;
-                    }
-                }
-            } else if (data.outputs?.predictions) {
-                predictions = data.outputs.predictions;
-            } else if (data.predictions) {
-                predictions = data.predictions;
-            }
-
-            if (predictions.length === 0) {
-                resultsList.innerHTML = '<p>No objects detected</p>';
-                
-                // Show debug info
-                debugInfo.style.display = 'block';
-                debugInfo.textContent = 'Response structure: ' + JSON.stringify(data, null, 2);
-            } else {
-                resultsList.innerHTML = predictions.map((pred, i) => `
-                    <div class="detection-item">
-                        <span><strong>${pred.class}</strong></span>
-                        <span class="confidence">${Math.round(pred.confidence * 100)}%</span>
-                    </div>
-                `).join('');
-                
-                debugInfo.style.display = 'none';
-            }
-
-            resultsDiv.style.display = 'block';
-        }
-    </script>
-</body>
-</html>
+        displayResults(predictions);
+    } catch (error) {
+        console.error("Detection Error:", error);
+        status.textContent = "Error: " + error.message;
+    }
+}
