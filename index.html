@@ -6,130 +6,109 @@
     <title>AI Pen Detector</title>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background-color: #f8f9fa;
+            font-family: sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
+            background-color: #f0f2f5;
             padding: 20px;
         }
-        .card {
+        .container {
             background: white;
-            padding: 2rem;
-            border-radius: 15px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            max-width: 500px;
-            width: 100%;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
             text-align: center;
+            max-width: 600px;
         }
         #outputImage {
-            max-width: 100%;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            display: none;
+            width: 100%;
+            border-radius: 12px;
+            margin-top: 20px;
+            display: none; /* Hidden until a result comes back */
         }
-        .status-pill {
-            background: #e9ecef;
-            padding: 8px 20px;
-            border-radius: 20px;
-            display: inline-block;
-            margin-bottom: 15px;
-            font-size: 14px;
-            color: #6c757d;
-        }
-        .count-text {
-            font-size: 24px;
-            font-weight: bold;
+        .status-badge {
+            background: #eef0ff;
             color: #4a4ae2;
-        }
-        input[type="file"] {
-            margin-bottom: 20px;
+            padding: 8px 16px;
+            border-radius: 50px;
+            font-weight: bold;
+            display: inline-block;
+            margin: 15px 0;
         }
     </style>
 </head>
 <body>
 
-    <div class="card">
-        <h1>AI Pen Detector</h1>
-        
-        <input type="file" id="imageInput" accept="image/*">
-        
-        <img id="outputImage" src="" alt="Analyzed Pen">
+<div class="container">
+    <h2>AI Pen Detection</h2>
+    <input type="file" id="imageInput" accept="image/*">
+    
+    <div id="status" class="status-badge">Upload an image to start</div>
+    
+    <img id="outputImage" src="" alt="Annotated Result">
+</div>
 
-        <div id="statusPill" class="status-pill">Waiting for image...</div>
-        <div id="countDisplay" class="count-text">0 Pens Detected</div>
-    </div>
+<script>
+    const imageInput = document.getElementById('imageInput');
+    const outputImage = document.getElementById('outputImage');
+    const status = document.getElementById('status');
 
-    <script>
-        const imageInput = document.getElementById('imageInput');
-        const outputImage = document.getElementById('outputImage');
-        const statusPill = document.getElementById('statusPill');
-        const countDisplay = document.getElementById('countDisplay');
+    // Your exact credentials from the screenshots
+    const API_KEY = "V3AIzFk49PlsUZXuSgw3"; 
+    const WORKSPACE = "artorias-lhd8r";
+    const WORKFLOW = "detect-count-and-visualize";
 
-        // Configuration from your screenshots
-        const API_KEY = "V3AIzFk49PlsUZXuSgw3";
-        const WORKSPACE = "artorias-lhd8r";
-        const WORKFLOW = "detect-count-and-visualize";
+    imageInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
 
-        imageInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+        status.textContent = "Analyzing...";
 
-            // Show loading state
-            statusPill.textContent = "Processing...";
-            countDisplay.textContent = "Detecting...";
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            const base64Image = event.target.result.split(',')[1];
+            await detectAndVisualize(base64Image);
+        };
+        reader.readAsDataURL(file);
+    });
 
-            // Convert image to Base64
-            const reader = new FileReader();
-            reader.onload = async (event) => {
-                const base64Image = event.target.result.split(',')[1];
-                await detectObjects(base64Image);
-            };
-            reader.readAsDataURL(file);
-        });
+    async function detectAndVisualize(base64Image) {
+        const url = `https://detect.roboflow.com/infer/workflows/${WORKSPACE}/${WORKFLOW}`;
 
-        async function detectObjects(base64Image) {
-            const url = `https://detect.roboflow.com/infer/workflows/${WORKSPACE}/${WORKFLOW}`;
+        try {
+            const response = await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    api_key: API_KEY,
+                    inputs: {
+                        image: { type: "base64", value: base64Image }
+                    }
+                })
+            });
 
-            try {
-                const response = await fetch(url, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        api_key: API_KEY,
-                        inputs: {
-                            image: { type: "base64", value: base64Image }
-                        }
-                    })
-                });
+            const data = await response.json();
+            console.log("Response:", data);
 
-                if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
-
-                const data = await response.json();
-                console.log("Roboflow Response:", data);
-
-                // MAPPING THE WORKFLOW OUTPUTS
-                // We use data.outputs[0] because Workflows return an array of results
-                const result = data.outputs[0];
-
-                // 1. Get the count from your 'count_objects' block
-                const penCount = result.count_objects || 0;
-                countDisplay.textContent = `${penCount} Pens Detected`;
-
-                // 2. Get the visual from your 'annotated_image' block
-                if (result.annotated_image && result.annotated_image.value) {
-                    outputImage.src = `data:image/jpeg;base64,${result.annotated_image.value}`;
-                    outputImage.style.display = 'block';
-                }
-
-                statusPill.textContent = "Analysis Complete";
-
-            } catch (error) {
-                console.error("Error:", error);
-                statusPill.textContent = "Error occurred";
-                countDisplay.textContent = "Check Console (F12)";
+            // THE FIX: Access the 'annotated_image' block from your Workflow
+            const result = data.outputs[0];
+            
+            if (result.annotated_image && result.annotated_image.value) {
+                // Update the image source with the base64 string from Roboflow
+                outputImage.src = "data:image/jpeg;base64," + result.annotated_image.value;
+                outputImage.style.display = "block";
+                status.textContent = "Analysis Complete";
+            } else {
+                status.textContent = "No detections found.";
             }
+
+        } catch (error) {
+            console.error(error);
+            status.textContent = "Error connecting to API";
         }
-    </script>
+    }
+</script>
+
 </body>
 </html>
