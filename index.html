@@ -5,37 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Pen Detector</title>
     <style>
-        body {
-            font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            background-color: #f0f2f5;
-            padding: 20px;
-        }
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            text-align: center;
-            max-width: 600px;
-        }
-        #outputImage {
-            width: 100%;
-            border-radius: 12px;
-            margin-top: 20px;
-            display: none; /* Hidden until a result comes back */
-        }
-        .status-badge {
-            background: #eef0ff;
-            color: #4a4ae2;
-            padding: 8px 16px;
-            border-radius: 50px;
-            font-weight: bold;
-            display: inline-block;
-            margin: 15px 0;
-        }
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; background-color: #f0f2f5; padding: 20px; }
+        .container { background: white; padding: 30px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); text-align: center; max-width: 600px; }
+        #outputImage { width: 100%; border-radius: 12px; margin-top: 20px; display: none; border: 2px solid #4a4ae2; }
+        .status-badge { background: #eef0ff; color: #4a4ae2; padding: 8px 16px; border-radius: 50px; font-weight: bold; display: inline-block; margin: 15px 0; }
+        .count-display { font-size: 24px; font-weight: bold; color: #333; margin-top: 10px; }
     </style>
 </head>
 <body>
@@ -44,7 +18,8 @@
     <h2>AI Pen Detection</h2>
     <input type="file" id="imageInput" accept="image/*">
     
-    <div id="status" class="status-badge">Upload an image to start</div>
+    <div id="status" class="status-badge">Ready for Upload</div>
+    <div id="countText" class="count-display">0 Pens Detected</div>
     
     <img id="outputImage" src="" alt="Annotated Result">
 </div>
@@ -53,8 +28,9 @@
     const imageInput = document.getElementById('imageInput');
     const outputImage = document.getElementById('outputImage');
     const status = document.getElementById('status');
+    const countText = document.getElementById('countText');
 
-    // Your exact credentials from the screenshots
+    // CONFIGURATION FROM YOUR SCREENSHOTS
     const API_KEY = "V3AIzFk49PlsUZXuSgw3"; 
     const WORKSPACE = "artorias-lhd8r";
     const WORKFLOW = "detect-count-and-visualize";
@@ -63,18 +39,19 @@
         const file = e.target.files[0];
         if (!file) return;
 
-        status.textContent = "Analyzing...";
-
+        status.textContent = "Analyzing Image...";
+        
         const reader = new FileReader();
         reader.onload = async (event) => {
             const base64Image = event.target.result.split(',')[1];
-            await detectAndVisualize(base64Image);
+            await detectWithWorkflow(base64Image);
         };
         reader.readAsDataURL(file);
     });
 
-    async function detectAndVisualize(base64Image) {
-        const url = `https://detect.roboflow.com/infer/workflows/${WORKSPACE}/${WORKFLOW}`;
+    async function detectWithWorkflow(base64Image) {
+        // Using the Serverless Workflow endpoint from your CURL command
+        const url = `https://serverless.roboflow.com/${WORKSPACE}/workflows/${WORKFLOW}`;
 
         try {
             const response = await fetch(url, {
@@ -89,23 +66,27 @@
             });
 
             const data = await response.json();
-            console.log("Response:", data);
+            console.log("Full Response:", data);
 
-            // THE FIX: Access the 'annotated_image' block from your Workflow
+            // MAPPING TO YOUR WORKFLOW BLOCKS (Screenshot 112)
             const result = data.outputs[0];
             
+            // 1. Get the count from the 'count_objects' block
+            const penCount = result.count_objects || 0;
+            countText.textContent = `${penCount} Pens Detected`;
+
+            // 2. Get the visual from the 'annotated_image' block
             if (result.annotated_image && result.annotated_image.value) {
-                // Update the image source with the base64 string from Roboflow
                 outputImage.src = "data:image/jpeg;base64," + result.annotated_image.value;
                 outputImage.style.display = "block";
-                status.textContent = "Analysis Complete";
+                status.textContent = "Success!";
             } else {
-                status.textContent = "No detections found.";
+                status.textContent = "No objects found.";
             }
 
         } catch (error) {
-            console.error(error);
-            status.textContent = "Error connecting to API";
+            console.error("Error:", error);
+            status.textContent = "API Error - Check Console";
         }
     }
 </script>
